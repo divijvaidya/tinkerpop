@@ -2081,8 +2081,20 @@ public interface GraphTraversal<S, E> extends Traversal<S, E> {
 
         // if it can be detected that this call to property() is related to an addV/E() then we can attempt to fold
         // the properties into that step to gain an optimization for those graphs that support such capabilities.
-        final Step endStep = this.asAdmin().getEndStep();
-        if ((endStep instanceof AddVertexStep || endStep instanceof AddEdgeStep || endStep instanceof AddVertexStartStep || endStep instanceof AddEdgeStartStep) &&
+        Step endStep = this.asAdmin().getEndStep();
+
+        // always try to fold the property() into the initial "AddElementStep" as the performance will be better
+        // and as it so happens with T the value must be set by way of that approach otherwise you get an error.
+        // it should be safe to execute this loop this way as we'll either hit an "AddElementStep" or an "EmptyStep".
+        // if empty, it will just use the regular AddPropertyStep being tacked on to the end of the traversal as usual
+        while (endStep instanceof AddPropertyStep) {
+            endStep = endStep.getPreviousStep();
+        }
+
+        // it's possible to fold the property() into the Mutating step if there are no metaproperties (i.e. keyValues)
+        // and if the cardinality is unspecified
+        if ((endStep instanceof AddVertexStep || endStep instanceof AddEdgeStep ||
+                endStep instanceof AddVertexStartStep || endStep instanceof AddEdgeStartStep) &&
                 keyValues.length == 0 && null == cardinality) {
             ((Mutating) endStep).addPropertyMutations(key, value);
         } else {
