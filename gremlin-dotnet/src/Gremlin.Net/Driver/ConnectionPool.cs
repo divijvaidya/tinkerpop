@@ -34,8 +34,7 @@ namespace Gremlin.Net.Driver
     internal class ConnectionPool : IDisposable
     {
         private readonly ConnectionFactory _connectionFactory;
-        private readonly ConcurrentDictionary<Connection, object> _connections =
-            new ConcurrentDictionary<Connection, object>();
+        private readonly ConcurrentConnectionCollection _connections = new ConcurrentConnectionCollection();
         private readonly int _poolSize;
         private readonly int _maxInProcessPerConnection;
         private int _poolState;
@@ -90,7 +89,7 @@ namespace Gremlin.Net.Driver
             var createdConnections = await Task.WhenAll(connectionCreationTasks).ConfigureAwait(false);
             foreach (var c in createdConnections)
             {
-                _connections.TryAdd(c, null);
+                _connections.Add(c);
             }
         }
         
@@ -120,7 +119,7 @@ namespace Gremlin.Net.Driver
             var nrMinInFlightConnections = int.MaxValue;
             Connection leastBusy = null;
             
-            foreach (var connection in _connections.Keys)
+            foreach (var connection in _connections)
             {
                 var nrInFlight = connection.NrRequestsInFlight;
                 if (nrInFlight >= nrMinInFlightConnections) continue;
@@ -138,7 +137,7 @@ namespace Gremlin.Net.Driver
         
         private void RemoveConnectionFromPool(Connection connection)
         {
-            if (_connections.TryRemove(connection, out _))
+            if (_connections.TryRemove(connection))
                 DefinitelyDestroyConnection(connection);
         }
         
@@ -160,9 +159,9 @@ namespace Gremlin.Net.Driver
 
         private async Task CloseAndRemoveAllConnectionsAsync()
         {
-            foreach (var connection in _connections.Keys)
+            foreach (var connection in _connections)
             {
-                _connections.TryRemove(connection, out _);
+                _connections.TryRemove(connection);
                 await connection.CloseAsync().ConfigureAwait(false);
                 DefinitelyDestroyConnection(connection);
             }
